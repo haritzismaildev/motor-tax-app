@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Sistem Pajak Kendaraan Bermotor</title>
+  <!-- Menggunakan Bootstrap 5 dari CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f8f9fa;
+    }
+    .card {
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="#">Pajak Kendaraan Satu Pintu</a>
+    </div>
+  </nav>
+  
+  <div class="container">
+    <!-- Form Registrasi Kendaraan -->
+    <div class="card">
+      <div class="card-header">
+        Registrasi Kendaraan
+      </div>
+      <div class="card-body">
+        <form id="vehicleForm">
+          <div class="mb-3">
+            <label for="ownerId" class="form-label">Owner ID</label>
+            <input type="text" class="form-control" name="ownerId" id="ownerId" required>
+          </div>
+          <div class="mb-3">
+            <label for="registrationNumber" class="form-label">Nomor Registrasi</label>
+            <input type="text" class="form-control" name="registrationNumber" id="registrationNumber" required>
+          </div>
+          <div class="mb-3">
+            <label for="vehicleType" class="form-label">Jenis Kendaraan</label>
+            <input type="text" class="form-control" name="vehicleType" id="vehicleType" required>
+          </div>
+          <div class="mb-3">
+            <label for="manufactureYear" class="form-label">Tahun Pembuatan</label>
+            <input type="number" class="form-control" name="manufactureYear" id="manufactureYear" required>
+          </div>
+          <button type="submit" class="btn btn-success">Daftar Kendaraan</button>
+        </form>
+        <div id="registrationResult" class="mt-3"></div>
+      </div>
+    </div>
+
+    <!-- Daftar Kendaraan dan Transaksi -->
+    <div class="card">
+      <div class="card-header">
+        Daftar Kendaraan
+      </div>
+      <div class="card-body">
+        <button id="listVehiclesBtn" class="btn btn-primary mb-3">Tampilkan Kendaraan</button>
+        <div id="vehicleList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Registrasi kendaraan
+    document.getElementById('vehicleForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      const data = {};
+      formData.forEach((value, key) => data[key] = value);
+      const response = await fetch('/api/vehicles/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const result = await response.json();
+      document.getElementById('registrationResult').innerHTML = `<div class="alert alert-info" role="alert">
+        ${JSON.stringify(result, null, 2)}
+      </div>`;
+      // Refresh daftar kendaraan jika ada
+      loadVehicles();
+    });
+
+    // Memuat daftar kendaraan
+    async function loadVehicles() {
+      const response = await fetch('/api/vehicles');
+      const data = await response.json();
+      const listDiv = document.getElementById('vehicleList');
+      if (!data.vehicles || data.vehicles.length === 0) {
+        listDiv.innerHTML = '<p class="text-muted">Tidak ada kendaraan terdaftar.</p>';
+        return;
+      }
+      let html = `<table class="table table-bordered">
+                    <thead class="table-light">
+                      <tr>
+                        <th>ID</th>
+                        <th>Owner ID</th>
+                        <th>Nomor Registrasi</th>
+                        <th>Jenis</th>
+                        <th>Tahun</th>
+                        <th>Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>`;
+      data.vehicles.forEach(vehicle => {
+        html += `<tr>
+                   <td>${vehicle.id}</td>
+                   <td>${vehicle.ownerId}</td>
+                   <td>${vehicle.registrationNumber}</td>
+                   <td>${vehicle.vehicleType}</td>
+                   <td>${vehicle.manufactureYear}</td>
+                   <td>
+                     <button onclick="calculateTax(${vehicle.id})" class="btn btn-sm btn-warning mb-1">Hitung Pajak</button>
+                     <button onclick="payTax(${vehicle.id})" class="btn btn-sm btn-success mb-1">Bayar Pajak</button>
+                   </td>
+                 </tr>`;
+        // Jika kendaraan memiliki transaksi, tampilkan detail di baris baru
+        if(vehicle.transactions && vehicle.transactions.length > 0) {
+          html += `<tr>
+                    <td colspan="6">
+                      <strong>Transaksi:</strong>
+                      <ul>`;
+          vehicle.transactions.forEach(tx => {
+            html += `<li>ID Transaksi: ${tx.transactionId} - Metode: ${tx.paymentMethod} - Nominal: Rp${tx.amount} - Tgl: ${new Date(tx.paymentDate).toLocaleString()}</li>`;
+          });
+          html += `  </ul>
+                    </td>
+                  </tr>`;
+        }
+      });
+      html += `</tbody></table>`;
+      listDiv.innerHTML = html;
+    }
+
+    // Memanggil daftar kendaraan saat tombol diklik
+    document.getElementById('listVehiclesBtn').addEventListener('click', loadVehicles);
+
+    // Fungsi hitung pajak
+    async function calculateTax(vehicleId) {
+      const response = await fetch(`/api/vehicles/${vehicleId}/calculate-tax`);
+      const data = await response.json();
+      alert(`Kendaraan ID: ${data.vehicleId}\nNomor Registrasi: ${data.registrationNumber}\nPajak Dasar: Rp${data.baseTax}\nSurcharge: Rp${data.surcharge}\nTotal Pajak: Rp${data.totalTax}`);
+    }
+
+    // Fungsi untuk melakukan simulasi pembayaran pajak
+    async function payTax(vehicleId) {
+      // Untuk contoh, kita bisa meminta input metode pembayaran melalui prompt (dapat dikembangkan lebih lanjut)
+      const paymentMethod = prompt("Masukkan metode pembayaran (misalnya: CV, Debit, atau lainnya):", "Debit/Credit Card");
+      if(paymentMethod === null) return; // jika user cancel prompt
+      
+      const response = await fetch(`/api/vehicles/${vehicleId}/paytax`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentMethod })
+      });
+      const data = await response.json();
+      alert(`Pembayaran berhasil!\nID Transaksi: ${data.transaction.transactionId}\nNominal: Rp${data.transaction.amount}`);
+      // Refresh daftar kendaraan agar transaksi terbaru terlihat
+      loadVehicles();
+    }
+  </script>
+</body>
+</html>
